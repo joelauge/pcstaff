@@ -32,7 +32,16 @@ app.use(session({
         sameSite: 'lax'
     }
 }));
-app.use(express.static(__dirname)); // Serve static files (HTML, CSS, JS)
+// Serve static files (HTML, CSS, JS) - must be before API routes
+app.use(express.static(__dirname, {
+    index: 'index.html',
+    extensions: ['html', 'css', 'js']
+}));
+
+// Handle root route explicitly
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
 // Authentication middleware
 function requireAuth(req, res, next) {
@@ -229,11 +238,16 @@ app.post('/api/data', requireAuth, async (req, res) => {
     }
 });
 
+// Initialize data files (for both local and Vercel)
+async function initializeApp() {
+    await initializeDataFile();
+    await initializeUsersFile();
+}
+
 // Start server (only if not on Vercel)
 if (require.main === module) {
     async function startServer() {
-        await initializeDataFile();
-        await initializeUsersFile();
+        await initializeApp();
         app.listen(PORT, () => {
             console.log(`Prayer Center Staff Management Server running on http://localhost:${PORT}`);
             console.log(`Open http://localhost:${PORT}/index.html in your browser`);
@@ -241,6 +255,9 @@ if (require.main === module) {
         });
     }
     startServer().catch(console.error);
+} else {
+    // On Vercel, initialize files when module loads
+    initializeApp().catch(console.error);
 }
 
 // Export for Vercel
