@@ -75,24 +75,25 @@ async function initializeFiles() {
         }
 
         // Copy files from project root to /tmp if on Vercel and files exist in root
+        // This allows files to be included in deployment without being in git
         if (process.env.VERCEL) {
-            const rootDataFile = path.join(__dirname, 'data.json');
-            const rootUsersFile = path.join(__dirname, 'users.json');
+            const rootDataFile = path.join(process.cwd(), 'data.json');
+            const rootUsersFile = path.join(process.cwd(), 'users.json');
             
             try {
                 const rootData = await fs.readFile(rootDataFile, 'utf8');
                 await fs.writeFile(DATA_FILE, rootData);
-                console.log('Copied data.json from project root to /tmp');
+                console.log('✓ Copied data.json from project root to /tmp');
             } catch (error) {
-                // File doesn't exist in root, that's okay
+                console.log('ℹ data.json not found in project root, using initialized version');
             }
             
             try {
                 const rootUsers = await fs.readFile(rootUsersFile, 'utf8');
                 await fs.writeFile(USERS_FILE, rootUsers);
-                console.log('Copied users.json from project root to /tmp');
+                console.log('✓ Copied users.json from project root to /tmp');
             } catch (error) {
-                // File doesn't exist in root, that's okay
+                console.log('ℹ users.json not found in project root, using initialized version');
             }
         }
         

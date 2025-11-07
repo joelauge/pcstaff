@@ -1,0 +1,9 @@
+node_modules/
+.DS_Store
+*.log
+.vercel
+FY2026  Daily Team Leader's Report.docx
+OldBinder_StaffManagement.md
+DEPLOYMENT.md
+DEPLOY_FILES.md
+
