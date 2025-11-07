@@ -32,16 +32,19 @@ app.use(session({
         sameSite: 'lax'
     }
 }));
-// Serve static files (HTML, CSS, JS) - must be before API routes
-app.use(express.static(__dirname, {
-    index: 'index.html',
-    extensions: ['html', 'css', 'js']
-}));
-
-// Handle root route explicitly
+// Handle root route explicitly (for Vercel)
 app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
+
+// Serve static files (for local development)
+// On Vercel, static files are served directly by the platform
+if (!process.env.VERCEL) {
+    app.use(express.static(__dirname, {
+        index: 'index.html',
+        extensions: ['html', 'css', 'js']
+    }));
+}
 
 // Authentication middleware
 function requireAuth(req, res, next) {
