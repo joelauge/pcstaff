@@ -51,6 +51,22 @@ app.use(express.static(staticPath, {
     }
 }));
 
+// Explicit routes for static assets (for better Vercel compatibility)
+app.get('/styles.css', (req, res) => {
+    res.setHeader('Content-Type', 'text/css; charset=utf-8');
+    res.sendFile(path.join(__dirname, 'styles.css'));
+});
+
+app.get('/app.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.sendFile(path.join(__dirname, 'app.js'));
+});
+
+app.get('/auth.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.sendFile(path.join(__dirname, 'auth.js'));
+});
+
 // Handle root route explicitly
 app.get('/', (req, res) => {
     const indexPath = path.join(__dirname, 'index.html');
