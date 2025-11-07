@@ -33,9 +33,19 @@ app.use(session({
     }
 }));
 // Serve static files (HTML, CSS, JS) - must be before API routes
-app.use(express.static(__dirname, {
-    index: 'index.html',
-    extensions: ['html', 'css', 'js']
+// Use absolute path resolution for better compatibility
+const staticPath = path.resolve(__dirname);
+app.use(express.static(staticPath, {
+    index: ['index.html'],
+    extensions: ['html', 'css', 'js'],
+    setHeaders: (res, filePath) => {
+        // Set proper content types
+        if (filePath.endsWith('.css')) {
+            res.setHeader('Content-Type', 'text/css');
+        } else if (filePath.endsWith('.js')) {
+            res.setHeader('Content-Type', 'application/javascript');
+        }
+    }
 }));
 
 // Handle root route explicitly
