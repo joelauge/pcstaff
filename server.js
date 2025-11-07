@@ -34,7 +34,13 @@ app.use(session({
 }));
 // Handle root route explicitly (for Vercel)
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
+    const indexPath = path.join(__dirname, 'index.html');
+    res.sendFile(indexPath, (err) => {
+        if (err) {
+            console.error('Error sending index.html:', err);
+            res.status(500).send('Error loading page');
+        }
+    });
 });
 
 // Serve static files (for local development)
