@@ -32,7 +32,50 @@ app.use(session({
         sameSite: 'lax'
     }
 }));
-// Serve static files (HTML, CSS, JS) - must be before API routes
+
+// Explicit routes for static assets (MUST come before static middleware)
+app.get('/styles.css', (req, res) => {
+    res.setHeader('Content-Type', 'text/css; charset=utf-8');
+    res.sendFile(path.join(__dirname, 'styles.css'), (err) => {
+        if (err) {
+            console.error('Error serving styles.css:', err);
+            res.status(404).send('CSS file not found');
+        }
+    });
+});
+
+app.get('/app.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.sendFile(path.join(__dirname, 'app.js'), (err) => {
+        if (err) {
+            console.error('Error serving app.js:', err);
+            res.status(404).send('JS file not found');
+        }
+    });
+});
+
+app.get('/auth.js', (req, res) => {
+    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+    res.sendFile(path.join(__dirname, 'auth.js'), (err) => {
+        if (err) {
+            console.error('Error serving auth.js:', err);
+            res.status(404).send('JS file not found');
+        }
+    });
+});
+
+// Handle root route explicitly
+app.get('/', (req, res) => {
+    const indexPath = path.join(__dirname, 'index.html');
+    res.sendFile(indexPath, (err) => {
+        if (err) {
+            console.error('Error sending index.html:', err);
+            res.status(500).send('Error loading page');
+        }
+    });
+});
+
+// Serve static files (HTML, CSS, JS) - fallback for other static files
 // Use absolute path resolution for better compatibility
 const staticPath = path.resolve(__dirname);
 app.use(express.static(staticPath, {
@@ -50,33 +93,6 @@ app.use(express.static(staticPath, {
         }
     }
 }));
-
-// Explicit routes for static assets (for better Vercel compatibility)
-app.get('/styles.css', (req, res) => {
-    res.setHeader('Content-Type', 'text/css; charset=utf-8');
-    res.sendFile(path.join(__dirname, 'styles.css'));
-});
-
-app.get('/app.js', (req, res) => {
-    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-    res.sendFile(path.join(__dirname, 'app.js'));
-});
-
-app.get('/auth.js', (req, res) => {
-    res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
-    res.sendFile(path.join(__dirname, 'auth.js'));
-});
-
-// Handle root route explicitly
-app.get('/', (req, res) => {
-    const indexPath = path.join(__dirname, 'index.html');
-    res.sendFile(indexPath, (err) => {
-        if (err) {
-            console.error('Error sending index.html:', err);
-            res.status(500).send('Error loading page');
-        }
-    });
-});
 
 // Authentication middleware
 function requireAuth(req, res, next) {
