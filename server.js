@@ -38,12 +38,15 @@ const staticPath = path.resolve(__dirname);
 app.use(express.static(staticPath, {
     index: ['index.html'],
     extensions: ['html', 'css', 'js'],
+    maxAge: '1d',
     setHeaders: (res, filePath) => {
         // Set proper content types
         if (filePath.endsWith('.css')) {
-            res.setHeader('Content-Type', 'text/css');
+            res.setHeader('Content-Type', 'text/css; charset=utf-8');
         } else if (filePath.endsWith('.js')) {
-            res.setHeader('Content-Type', 'application/javascript');
+            res.setHeader('Content-Type', 'application/javascript; charset=utf-8');
+        } else if (filePath.endsWith('.html')) {
+            res.setHeader('Content-Type', 'text/html; charset=utf-8');
         }
     }
 }));
