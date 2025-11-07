@@ -1,0 +1,24 @@
+{
+  "name": "pc-staff-management",
+  "version": "1.0.0",
+  "description": "Daily Team Leader Report Management System",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": [
+    "staff",
+    "management",
+    "schedule"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "bcrypt": "^5.1.1",
+    "express-session": "^1.17.3"
+  }
+}
+

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prayer Center Staff Management - Daily Team Leader Report</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Login Modal -->
+    <div id="login-modal" class="login-modal">
+        <div class="login-container">
+            <h2>Login</h2>
+            <p class="login-subtitle">Prayer Center Staff Management</p>
+            <form id="login-form">
+                <div class="form-group">
+                    <label for="login-email">Email</label>
+                    <input type="email" id="login-email" required autocomplete="email">
+                </div>
+                <div class="form-group">
+                    <label for="login-password">Password</label>
+                    <input type="password" id="login-password" required autocomplete="current-password">
+                </div>
+                <div id="login-error" class="error-message hidden"></div>
+                <button type="submit" class="btn btn-primary btn-login">Login</button>
+            </form>
+            <div class="login-footer">
+                <button id="logout-btn" class="btn-link hidden">Logout</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container hidden" id="app-container">
+        <header>
+            <div class="header-top">
+                <div>
+                    <h1>Prayer Center Staff Management</h1>
+                    <p class="subtitle">Daily Team Leader Report</p>
+                </div>
+                <div class="user-info">
+                    <span id="user-email"></span>
+                    <button id="header-logout-btn" class="btn btn-logout">Logout</button>
+                </div>
+            </div>
+        </header>
+
+        <!-- Week Picker -->
+        <div class="week-picker-container">
+            <label for="week-picker" class="week-picker-label">Select Week:</label>
+            <input type="week" id="week-picker" class="week-picker-input">
+            <button id="prev-week-btn" class="btn-week-nav">← Previous</button>
+            <button id="next-week-btn" class="btn-week-nav">Next →</button>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="day-nav">
+            <button class="nav-btn" data-day="sunday">Sunday</button>
+            <button class="nav-btn" data-day="monday">Monday</button>
+            <button class="nav-btn" data-day="tuesday">Tuesday</button>
+            <button class="nav-btn" data-day="wednesday">Wednesday</button>
+            <button class="nav-btn" data-day="thursday">Thursday</button>
+            <button class="nav-btn" data-day="friday">Friday</button>
+            <button class="nav-btn" data-day="saturday">Saturday</button>
+            <button class="nav-btn" data-day="notes">Additional Notes</button>
+        </nav>
+
+        <!-- Staff Management Panel -->
+        <div class="staff-management">
+            <h2>Staff Roster</h2>
+            <div class="staff-controls">
+                <input type="text" id="new-staff-name" placeholder="Enter staff name" class="staff-input">
+                <button id="add-staff-btn" class="btn btn-primary">Add Staff Member</button>
+                <button id="reset-data-btn" class="btn" style="background: #ff6b6b; color: white; margin-left: 10px;" onclick="resetToOriginal()">Reset to Original</button>
+            </div>
+            <div id="staff-list" class="staff-list"></div>
+        </div>
+
+        <!-- Day Views -->
+        <div id="day-views" class="day-views">
+            <!-- Day views will be dynamically generated -->
+        </div>
+
+        <!-- Additional Notes View -->
+        <div id="notes-view" class="notes-view hidden">
+            <h2>Team Leader Report Additional Notes</h2>
+            <p class="notes-description">
+                Please use this page for team prayer requests, updates and sharing information with other Team Leaders 
+                that might be important but the space on the Team Leader Daily Report doesn't allow for. 
+                Indicate with an * that there is information on the notes page.
+            </p>
+            <textarea id="additional-notes" class="notes-textarea" placeholder="Enter additional notes here..."></textarea>
+        </div>
+    </div>
+
+    <script src="auth.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
+
