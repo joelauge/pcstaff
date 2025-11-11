@@ -292,30 +292,31 @@ app.post('/api/data', requireAuth, async (req, res) => {
 // Initialize data files (for both local and Vercel)
 async function initializeApp() {
     try {
-        await initializeDataFile();
-        await initializeUsersFile();
-        
-        // On Vercel, try to copy from project root if files exist there
-        if (process.env.VERCEL) {
+        // On Vercel, ALWAYS try to copy from project root first (if files exist)
+        // This ensures the latest data is used, even if /tmp already has old data
+        if (isVercel) {
             const rootDataFile = path.join(process.cwd(), 'data.json');
             const rootUsersFile = path.join(process.cwd(), 'users.json');
             
             try {
                 const rootData = await fs.readFile(rootDataFile, 'utf8');
                 await fs.writeFile(DATA_FILE, rootData);
-                console.log('Copied data.json from project root to /tmp');
+                console.log('✓ Copied data.json from project root to /tmp');
             } catch (error) {
-                // File doesn't exist, use initialized version
+                console.log('ℹ data.json not found in project root, will initialize default');
             }
             
             try {
                 const rootUsers = await fs.readFile(rootUsersFile, 'utf8');
                 await fs.writeFile(USERS_FILE, rootUsers);
-                console.log('Copied users.json from project root to /tmp');
+                console.log('✓ Copied users.json from project root to /tmp');
             } catch (error) {
-                // File doesn't exist, use initialized version
+                console.log('ℹ users.json not found in project root, will initialize default');
             }
         }
+        
+        await initializeDataFile();
+        await initializeUsersFile();
     } catch (error) {
         console.error('Error initializing app:', error);
     }

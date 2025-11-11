@@ -15,10 +15,35 @@ const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
 async function initializeFiles() {
     try {
-        // Initialize data.json
+        // On Vercel, ALWAYS try to copy from project root first (if files exist)
+        // This ensures the latest data is used, even if /tmp already has old data
+        if (process.env.VERCEL) {
+            const rootDataFile = path.join(process.cwd(), 'data.json');
+            const rootUsersFile = path.join(process.cwd(), 'users.json');
+            
+            // Try to copy data.json from project root
+            try {
+                const rootData = await fs.readFile(rootDataFile, 'utf8');
+                await fs.writeFile(DATA_FILE, rootData);
+                console.log('✓ Copied data.json from project root to /tmp');
+            } catch (error) {
+                console.log('ℹ data.json not found in project root, will initialize default');
+            }
+            
+            // Try to copy users.json from project root
+            try {
+                const rootUsers = await fs.readFile(rootUsersFile, 'utf8');
+                await fs.writeFile(USERS_FILE, rootUsers);
+                console.log('✓ Copied users.json from project root to /tmp');
+            } catch (error) {
+                console.log('ℹ users.json not found in project root, will initialize default');
+            }
+        }
+
+        // Initialize data.json if it doesn't exist
         try {
             await fs.access(DATA_FILE);
-            console.log('data.json already exists');
+            console.log('✓ data.json exists');
         } catch (error) {
             const today = new Date();
             const year = today.getFullYear();
@@ -53,13 +78,13 @@ async function initializeFiles() {
             };
             
             await fs.writeFile(DATA_FILE, JSON.stringify(defaultData, null, 2));
-            console.log('Created data.json');
+            console.log('✓ Created default data.json');
         }
 
-        // Initialize users.json
+        // Initialize users.json if it doesn't exist
         try {
             await fs.access(USERS_FILE);
-            console.log('users.json already exists');
+            console.log('✓ users.json exists');
         } catch (error) {
             const defaultPassword = await bcrypt.hash('admin123', 10);
             const defaultUsers = [
@@ -71,35 +96,12 @@ async function initializeFiles() {
             ];
             
             await fs.writeFile(USERS_FILE, JSON.stringify(defaultUsers, null, 2));
-            console.log('Created users.json with default admin user');
-        }
-
-        // Copy files from project root to /tmp if on Vercel and files exist in root
-        // This allows files to be included in deployment without being in git
-        if (process.env.VERCEL) {
-            const rootDataFile = path.join(process.cwd(), 'data.json');
-            const rootUsersFile = path.join(process.cwd(), 'users.json');
-            
-            try {
-                const rootData = await fs.readFile(rootDataFile, 'utf8');
-                await fs.writeFile(DATA_FILE, rootData);
-                console.log('✓ Copied data.json from project root to /tmp');
-            } catch (error) {
-                console.log('ℹ data.json not found in project root, using initialized version');
-            }
-            
-            try {
-                const rootUsers = await fs.readFile(rootUsersFile, 'utf8');
-                await fs.writeFile(USERS_FILE, rootUsers);
-                console.log('✓ Copied users.json from project root to /tmp');
-            } catch (error) {
-                console.log('ℹ users.json not found in project root, using initialized version');
-            }
+            console.log('✓ Created default users.json');
         }
         
-        console.log('Build script completed successfully');
+        console.log('✓ Build script completed successfully');
     } catch (error) {
-        console.error('Error in build script:', error);
+        console.error('✗ Error in build script:', error);
         process.exit(1);
     }
 }
