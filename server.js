@@ -292,9 +292,9 @@ app.post('/api/data', requireAuth, async (req, res) => {
 // Initialize data files (for both local and Vercel)
 async function initializeApp() {
     try {
-        // On Vercel, ALWAYS try to copy from project root first (if files exist)
-        // This ensures the latest data is used, even if /tmp already has old data
         if (isVercel) {
+            // On Vercel, ALWAYS try to copy from project root first (if files exist)
+            // This ensures the latest data is used, even if /tmp already has old data
             const rootDataFile = path.join(process.cwd(), 'data.json');
             const rootUsersFile = path.join(process.cwd(), 'users.json');
             
@@ -313,10 +313,38 @@ async function initializeApp() {
             } catch (error) {
                 console.log('ℹ users.json not found in project root, will initialize default');
             }
+        } else {
+            // On local development, check if files exist in project root
+            // If they exist, use them directly (DATA_FILE already points to __dirname/data.json)
+            const rootDataFile = path.join(__dirname, 'data.json');
+            const rootUsersFile = path.join(__dirname, 'users.json');
+            
+            try {
+                await fs.access(rootDataFile);
+                console.log('✓ Found data.json in project root, using existing file');
+            } catch (error) {
+                console.log('ℹ data.json not found, will initialize default');
+            }
+            
+            try {
+                await fs.access(rootUsersFile);
+                console.log('✓ Found users.json in project root, using existing file');
+            } catch (error) {
+                console.log('ℹ users.json not found, will initialize default');
+            }
         }
         
+        // Initialize files (will only create if they don't exist)
         await initializeDataFile();
         await initializeUsersFile();
+        
+        // Log what data was loaded
+        if (!isVercel) {
+            const data = await readData();
+            if (data) {
+                console.log(`✓ Loaded data: ${data.staff?.length || 0} staff members, ${Object.keys(data.weeks || {}).length} weeks`);
+            }
+        }
     } catch (error) {
         console.error('Error initializing app:', error);
     }
