@@ -398,6 +398,145 @@ app.post('/api/data', requireAuth, async (req, res) => {
     }
 });
 
+// Backup directory
+const BACKUP_DIR = isVercel ? '/tmp/backups' : path.join(__dirname, 'backups');
+
+// Create backup function
+async function createBackup() {
+    try {
+        // Ensure backup directory exists
+        await fs.mkdir(BACKUP_DIR, { recursive: true });
+        
+        // Get current date for backup filename
+        const now = new Date();
+        const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
+        const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-'); // HH-MM-SS
+        
+        // Read current data files
+        const data = await readData();
+        const users = await readUsers();
+        
+        if (!data && users.length === 0) {
+            console.log('⚠️ No data to backup');
+            return { success: false, message: 'No data to backup' };
+        }
+        
+        // Create backup object
+        const backup = {
+            timestamp: now.toISOString(),
+            date: dateStr,
+            data: data,
+            users: users.map(u => ({
+                email: u.email,
+                name: u.name,
+                // Don't backup passwords for security
+                passwordHash: '[REDACTED]'
+            }))
+        };
+        
+        // Save backup file
+        const backupFileName = `backup-${dateStr}-${timeStr}.json`;
+        const backupPath = path.join(BACKUP_DIR, backupFileName);
+        await fs.writeFile(backupPath, JSON.stringify(backup, null, 2));
+        
+        console.log(`✅ Backup created: ${backupFileName}`);
+        
+        // Clean up old backups (keep last 7 days)
+        await cleanupOldBackups();
+        
+        return { 
+            success: true, 
+            message: 'Backup created successfully',
+            filename: backupFileName,
+            timestamp: now.toISOString()
+        };
+    } catch (error) {
+        console.error('❌ Error creating backup:', error);
+        return { success: false, message: error.message };
+    }
+}
+
+// Clean up backups older than 7 days
+async function cleanupOldBackups() {
+    try {
+        const files = await fs.readdir(BACKUP_DIR);
+        const now = Date.now();
+        const sevenDaysAgo = now - (7 * 24 * 60 * 60 * 1000);
+        
+        let deletedCount = 0;
+        for (const file of files) {
+            if (file.startsWith('backup-') && file.endsWith('.json')) {
+                const filePath = path.join(BACKUP_DIR, file);
+                const stats = await fs.stat(filePath);
+                
+                if (stats.mtimeMs < sevenDaysAgo) {
+                    await fs.unlink(filePath);
+                    deletedCount++;
+                    console.log(`🗑️ Deleted old backup: ${file}`);
+                }
+            }
+        }
+        
+        if (deletedCount > 0) {
+            console.log(`✅ Cleaned up ${deletedCount} old backup(s)`);
+        }
+    } catch (error) {
+        console.error('⚠️ Error cleaning up old backups:', error.message);
+    }
+}
+
+// Backup endpoint (can be called by cron or manually)
+app.post('/api/backup', async (req, res) => {
+    try {
+        // Optional: Require authentication or use a secret token
+        const backupSecret = process.env.BACKUP_SECRET;
+        if (backupSecret && req.headers['x-backup-secret'] !== backupSecret) {
+            return res.status(401).json({ error: 'Unauthorized' });
+        }
+        
+        const result = await createBackup();
+        
+        if (result.success) {
+            res.json(result);
+        } else {
+            res.status(500).json(result);
+        }
+    } catch (error) {
+        console.error('❌ Error in backup endpoint:', error);
+        res.status(500).json({ error: 'Server error creating backup: ' + error.message });
+    }
+});
+
+// Get list of backups (protected)
+app.get('/api/backups', requireAuth, async (req, res) => {
+    try {
+        await fs.mkdir(BACKUP_DIR, { recursive: true });
+        const files = await fs.readdir(BACKUP_DIR);
+        
+        const backups = [];
+        for (const file of files) {
+            if (file.startsWith('backup-') && file.endsWith('.json')) {
+                const filePath = path.join(BACKUP_DIR, file);
+                const stats = await fs.stat(filePath);
+                backups.push({
+                    filename: file,
+                    size: stats.size,
+                    created: stats.birthtime,
+                    modified: stats.mtime
+                });
+            }
+        }
+        
+        // Sort by modified date (newest first)
+        backups.sort((a, b) => b.modified - a.modified);
+        
+        res.json({ backups });
+    } catch (error) {
+        console.error('❌ Error listing backups:', error);
+        res.status(500).json({ error: 'Server error listing backups: ' + error.message });
+    }
+});
+
 // Initialize data files (for both local and Vercel)
 async function initializeApp() {
     try {

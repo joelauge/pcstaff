@@ -1,0 +1,21 @@
+name: Daily Backup
+
+on:
+  schedule:
+    # Run daily at midnight UTC (adjust timezone as needed)
+    - cron: '0 0 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Vercel Backup
+        run: |
+          curl -X POST "${{ secrets.VERCEL_BACKUP_URL }}" \
+            -H "x-backup-secret: ${{ secrets.BACKUP_SECRET }}" \
+            -H "Content-Type: application/json"
+        env:
+          VERCEL_BACKUP_URL: ${{ secrets.VERCEL_BACKUP_URL }}
+          BACKUP_SECRET: ${{ secrets.BACKUP_SECRET }}
+

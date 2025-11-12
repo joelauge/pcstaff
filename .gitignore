@@ -3,6 +3,7 @@ data.json
 users.json
 data/data.json
 data/users.json
+backups/
 .DS_Store
 *.log
 
