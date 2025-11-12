@@ -368,13 +368,20 @@ const DEFAULT_STAFF = [
 async function loadFromStorage() {
     try {
         console.log('📥 Loading data from server...');
+        console.log('🌐 Current URL:', window.location.href);
         const response = await fetch('/api/data', {
-            credentials: 'include'
+            credentials: 'include',
+            headers: {
+                'Accept': 'application/json'
+            }
         });
         
         console.log('📡 Load response status:', response.status, response.statusText);
+        console.log('📡 Response headers:', Object.fromEntries(response.headers.entries()));
         
         if (!response.ok) {
+            const errorText = await response.text();
+            console.error('❌ Response error body:', errorText);
             if (response.status === 401) {
                 console.error('❌ Unauthorized - not logged in');
                 // Unauthorized - redirect to login
