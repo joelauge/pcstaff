@@ -30,11 +30,10 @@ app.use(session({
     saveUninitialized: false,
     cookie: {
         // On Vercel, we're behind a proxy with HTTPS, so secure should be true
-        // But we need to detect Vercel environment properly
         secure: isVercel || process.env.NODE_ENV === 'production',
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        sameSite: isVercel ? 'none' : 'lax', // 'none' required for cross-site cookies on Vercel
+        sameSite: 'lax', // 'lax' works for same-site cookies (frontend and API on same domain)
         // Don't set domain - let browser handle it
     }
 }));
