@@ -18,25 +18,59 @@ async function initializeFiles() {
         // On Vercel, ALWAYS try to copy from project root first (if files exist)
         // This ensures the latest data is used, even if /tmp already has old data
         if (process.env.VERCEL) {
-            const rootDataFile = path.join(process.cwd(), 'data.json');
-            const rootUsersFile = path.join(process.cwd(), 'users.json');
+            console.log('🔍 Vercel build detected, looking for data files...');
+            console.log('📁 Current working directory:', process.cwd());
+            console.log('📁 __dirname:', __dirname);
+            
+            // Try multiple possible locations for the files
+            const possibleDataPaths = [
+                path.join(process.cwd(), 'data.json'),
+                path.join(__dirname, 'data.json'),
+                path.join(process.cwd(), '..', 'data.json')
+            ];
+            
+            const possibleUsersPaths = [
+                path.join(process.cwd(), 'users.json'),
+                path.join(__dirname, 'users.json'),
+                path.join(process.cwd(), '..', 'users.json')
+            ];
             
             // Try to copy data.json from project root
-            try {
-                const rootData = await fs.readFile(rootDataFile, 'utf8');
-                await fs.writeFile(DATA_FILE, rootData);
-                console.log('✓ Copied data.json from project root to /tmp');
-            } catch (error) {
-                console.log('ℹ data.json not found in project root, will initialize default');
+            let dataCopied = false;
+            for (const dataPath of possibleDataPaths) {
+                try {
+                    console.log(`🔍 Checking for data.json at: ${dataPath}`);
+                    const rootData = await fs.readFile(dataPath, 'utf8');
+                    await fs.writeFile(DATA_FILE, rootData);
+                    console.log(`✓ Copied data.json from ${dataPath} to /tmp`);
+                    dataCopied = true;
+                    break;
+                } catch (error) {
+                    // Continue to next path
+                }
+            }
+            
+            if (!dataCopied) {
+                console.log('ℹ data.json not found in any expected location, will initialize default');
             }
             
             // Try to copy users.json from project root
-            try {
-                const rootUsers = await fs.readFile(rootUsersFile, 'utf8');
-                await fs.writeFile(USERS_FILE, rootUsers);
-                console.log('✓ Copied users.json from project root to /tmp');
-            } catch (error) {
-                console.log('ℹ users.json not found in project root, will initialize default');
+            let usersCopied = false;
+            for (const usersPath of possibleUsersPaths) {
+                try {
+                    console.log(`🔍 Checking for users.json at: ${usersPath}`);
+                    const rootUsers = await fs.readFile(usersPath, 'utf8');
+                    await fs.writeFile(USERS_FILE, rootUsers);
+                    console.log(`✓ Copied users.json from ${usersPath} to /tmp`);
+                    usersCopied = true;
+                    break;
+                } catch (error) {
+                    // Continue to next path
+                }
+            }
+            
+            if (!usersCopied) {
+                console.log('ℹ users.json not found in any expected location, will initialize default');
             }
         }
 
