@@ -22,6 +22,14 @@ async function initializeFiles() {
             console.log('📁 Current working directory:', process.cwd());
             console.log('📁 __dirname:', __dirname);
             
+            // List files in current directory to see what's available
+            try {
+                const files = await fs.readdir(process.cwd());
+                console.log('📂 Files in project root:', files.filter(f => f.endsWith('.json')).join(', '));
+            } catch (e) {
+                console.log('⚠️ Could not list files in project root');
+            }
+            
             // Try multiple possible locations for the files
             const possibleDataPaths = [
                 path.join(process.cwd(), 'data.json'),
@@ -40,18 +48,21 @@ async function initializeFiles() {
             for (const dataPath of possibleDataPaths) {
                 try {
                     console.log(`🔍 Checking for data.json at: ${dataPath}`);
+                    await fs.access(dataPath);
                     const rootData = await fs.readFile(dataPath, 'utf8');
+                    const parsed = JSON.parse(rootData);
+                    console.log(`✅ Found data.json with ${parsed.staff?.length || 0} staff, ${Object.keys(parsed.weeks || {}).length} weeks`);
                     await fs.writeFile(DATA_FILE, rootData);
-                    console.log(`✓ Copied data.json from ${dataPath} to /tmp`);
+                    console.log(`✓ Copied data.json from ${dataPath} to ${DATA_FILE}`);
                     dataCopied = true;
                     break;
                 } catch (error) {
-                    // Continue to next path
+                    console.log(`   ❌ Not found at ${dataPath}: ${error.code || error.message}`);
                 }
             }
             
             if (!dataCopied) {
-                console.log('ℹ data.json not found in any expected location, will initialize default');
+                console.log('⚠️ data.json not found in any expected location, will initialize default');
             }
             
             // Try to copy users.json from project root
@@ -59,18 +70,21 @@ async function initializeFiles() {
             for (const usersPath of possibleUsersPaths) {
                 try {
                     console.log(`🔍 Checking for users.json at: ${usersPath}`);
+                    await fs.access(usersPath);
                     const rootUsers = await fs.readFile(usersPath, 'utf8');
+                    const parsed = JSON.parse(rootUsers);
+                    console.log(`✅ Found users.json with ${parsed.length || 0} users:`, parsed.map(u => u.email).join(', '));
                     await fs.writeFile(USERS_FILE, rootUsers);
-                    console.log(`✓ Copied users.json from ${usersPath} to /tmp`);
+                    console.log(`✓ Copied users.json from ${usersPath} to ${USERS_FILE}`);
                     usersCopied = true;
                     break;
                 } catch (error) {
-                    // Continue to next path
+                    console.log(`   ❌ Not found at ${usersPath}: ${error.code || error.message}`);
                 }
             }
             
             if (!usersCopied) {
-                console.log('ℹ users.json not found in any expected location, will initialize default');
+                console.log('⚠️ users.json not found in any expected location, will initialize default');
             }
         }
 
