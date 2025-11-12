@@ -1,6 +1,8 @@
 node_modules/
 data.json
 users.json
+data/data.json
+data/users.json
 .DS_Store
 *.log
 

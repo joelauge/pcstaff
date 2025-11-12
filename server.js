@@ -9,11 +9,16 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Use /tmp directory on Vercel (serverless functions have read-only filesystem except /tmp)
-// For local development, use current directory
+// For local development, use data directory
 const isVercel = process.env.VERCEL === '1';
-const DATA_DIR = isVercel ? '/tmp' : __dirname;
+const DATA_DIR = isVercel ? '/tmp' : path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'data.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
+
+// Source files in project (for copying to /tmp on Vercel)
+const SOURCE_DATA_DIR = path.join(__dirname, 'data');
+const SOURCE_DATA_FILE = path.join(SOURCE_DATA_DIR, 'data.json');
+const SOURCE_USERS_FILE = path.join(SOURCE_DATA_DIR, 'users.json');
 
 // Middleware
 // Trust proxy on Vercel (important for cookies and sessions)
@@ -360,18 +365,22 @@ async function initializeApp() {
             console.log('📁 USERS_FILE:', USERS_FILE);
             
             // On Vercel, try multiple locations for the files
-            // Files might be in the deployment bundle or need to be copied from build
+            // Priority: data/ folder (included in deployment) > project root > /tmp (from build)
             const possibleDataPaths = [
+                SOURCE_DATA_FILE, // data/data.json (included in deployment)
+                path.join(process.cwd(), 'data', 'data.json'),
+                path.join(__dirname, 'data', 'data.json'),
                 path.join(process.cwd(), 'data.json'),
                 path.join(__dirname, 'data.json'),
-                path.join(process.cwd(), '..', 'data.json'),
                 '/tmp/data.json' // Already copied during build
             ];
             
             const possibleUsersPaths = [
+                SOURCE_USERS_FILE, // data/users.json (included in deployment)
+                path.join(process.cwd(), 'data', 'users.json'),
+                path.join(__dirname, 'data', 'users.json'),
                 path.join(process.cwd(), 'users.json'),
                 path.join(__dirname, 'users.json'),
-                path.join(process.cwd(), '..', 'users.json'),
                 '/tmp/users.json' // Already copied during build
             ];
             
@@ -419,23 +428,57 @@ async function initializeApp() {
                 console.log('⚠️ users.json not found in any location, will check if /tmp has it or initialize default');
             }
         } else {
-            // On local development, check if files exist in project root
-            // If they exist, use them directly (DATA_FILE already points to __dirname/data.json)
+            // On local development, use data/ folder
+            // Check if data/ folder exists, if not, try project root (for migration)
+            const dataDir = path.join(__dirname, 'data');
             const rootDataFile = path.join(__dirname, 'data.json');
             const rootUsersFile = path.join(__dirname, 'users.json');
             
+            // Try to migrate from project root to data/ folder if needed
             try {
                 await fs.access(rootDataFile);
-                console.log('✓ Found data.json in project root, using existing file');
+                // File exists in root, check if data/ folder exists
+                try {
+                    await fs.access(dataDir);
+                } catch {
+                    // Create data/ folder
+                    await fs.mkdir(dataDir, { recursive: true });
+                }
+                // Copy to data/ folder if it doesn't exist there
+                const dataFileInFolder = path.join(dataDir, 'data.json');
+                try {
+                    await fs.access(dataFileInFolder);
+                    console.log('✓ Found data.json in data/ folder');
+                } catch {
+                    const rootData = await fs.readFile(rootDataFile, 'utf8');
+                    await fs.writeFile(dataFileInFolder, rootData);
+                    console.log('✓ Migrated data.json from project root to data/ folder');
+                }
             } catch (error) {
-                console.log('ℹ data.json not found, will initialize default');
+                console.log('ℹ data.json not found in project root');
             }
             
             try {
                 await fs.access(rootUsersFile);
-                console.log('✓ Found users.json in project root, using existing file');
+                // File exists in root, check if data/ folder exists
+                try {
+                    await fs.access(dataDir);
+                } catch {
+                    // Create data/ folder
+                    await fs.mkdir(dataDir, { recursive: true });
+                }
+                // Copy to data/ folder if it doesn't exist there
+                const usersFileInFolder = path.join(dataDir, 'users.json');
+                try {
+                    await fs.access(usersFileInFolder);
+                    console.log('✓ Found users.json in data/ folder');
+                } catch {
+                    const rootUsers = await fs.readFile(rootUsersFile, 'utf8');
+                    await fs.writeFile(usersFileInFolder, rootUsers);
+                    console.log('✓ Migrated users.json from project root to data/ folder');
+                }
             } catch (error) {
-                console.log('ℹ users.json not found, will initialize default');
+                console.log('ℹ users.json not found in project root');
             }
         }
         

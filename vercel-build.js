@@ -9,9 +9,14 @@ const fs = require('fs').promises;
 const path = require('path');
 const bcrypt = require('bcrypt');
 
-const DATA_DIR = process.env.VERCEL ? '/tmp' : __dirname;
+const DATA_DIR = process.env.VERCEL ? '/tmp' : path.join(__dirname, 'data');
 const DATA_FILE = path.join(DATA_DIR, 'data.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
+
+// Source files in project
+const SOURCE_DATA_DIR = path.join(__dirname, 'data');
+const SOURCE_DATA_FILE = path.join(SOURCE_DATA_DIR, 'data.json');
+const SOURCE_USERS_FILE = path.join(SOURCE_DATA_DIR, 'users.json');
 
 async function initializeFiles() {
     try {
@@ -31,13 +36,20 @@ async function initializeFiles() {
             }
             
             // Try multiple possible locations for the files
+            // Priority: data/ folder > project root
             const possibleDataPaths = [
+                path.join(process.cwd(), 'data', 'data.json'),
+                path.join(__dirname, 'data', 'data.json'),
+                SOURCE_DATA_FILE,
                 path.join(process.cwd(), 'data.json'),
                 path.join(__dirname, 'data.json'),
                 path.join(process.cwd(), '..', 'data.json')
             ];
             
             const possibleUsersPaths = [
+                path.join(process.cwd(), 'data', 'users.json'),
+                path.join(__dirname, 'data', 'users.json'),
+                SOURCE_USERS_FILE,
                 path.join(process.cwd(), 'users.json'),
                 path.join(__dirname, 'users.json'),
                 path.join(process.cwd(), '..', 'users.json')
