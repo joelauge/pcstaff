@@ -403,6 +403,11 @@ async function loadFromStorage() {
             }
         }
         if (data) {
+            console.log('📦 Assigning data to appState...', {
+                staffCount: data.staff?.length,
+                weeksCount: Object.keys(data.weeks || {}).length,
+                currentWeek: data.currentWeek
+            });
             Object.assign(appState, data);
             // Initialize staffProfiles if it doesn't exist
             if (!appState.staffProfiles) {
@@ -410,8 +415,10 @@ async function loadFromStorage() {
             }
             // Always ensure default staff are present (merge with existing)
             if (!appState.staff || appState.staff.length === 0) {
+                console.log('⚠️ No staff in data, using defaults');
                 appState.staff = [...DEFAULT_STAFF];
             } else {
+                console.log('✅ Staff found in data:', appState.staff.length, 'members');
                 // Merge default staff with existing, avoiding duplicates
                 DEFAULT_STAFF.forEach(staff => {
                     if (!appState.staff.includes(staff)) {
@@ -424,9 +431,19 @@ async function loadFromStorage() {
             // Initialize current week if needed
             if (!appState.currentWeek) {
                 appState.currentWeek = getWeekString(new Date());
+                console.log('📅 Set current week to:', appState.currentWeek);
             }
             const weekData = getCurrentWeekData();
+            console.log('📊 Current week data:', {
+                hasSunday: !!weekData.sunday,
+                sundayShifts: weekData.sunday?.shifts?.length || 0
+            });
             initializeShifts(weekData);
+            console.log('✅ Data loading complete, appState:', {
+                staffCount: appState.staff?.length,
+                currentWeek: appState.currentWeek,
+                weeksCount: Object.keys(appState.weeks || {}).length
+            });
             return true; // Data loaded
         }
     } catch (e) {
@@ -495,7 +512,18 @@ function removeStaff(name) {
 
 function renderStaffList() {
     const staffList = document.getElementById('staff-list');
+    if (!staffList) {
+        console.error('❌ staff-list element not found!');
+        return;
+    }
     staffList.innerHTML = '';
+    
+    console.log('👥 Rendering staff list with', appState.staff?.length || 0, 'staff members');
+    
+    if (!appState.staff || appState.staff.length === 0) {
+        console.warn('⚠️ No staff to render!');
+        return;
+    }
     
     appState.staff.forEach(staff => {
         const staffItem = document.createElement('div');
@@ -804,9 +832,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
     
     saveToStorage();
+    
+    console.log('🎨 Rendering UI...', {
+        staffCount: appState.staff?.length,
+        currentWeek: appState.currentWeek
+    });
     renderStaffList();
     renderDayViews();
     updateWeekPicker();
+    console.log('✅ UI rendering complete');
     
     // Navigation
     document.querySelectorAll('.nav-btn').forEach(btn => {
