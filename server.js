@@ -188,22 +188,30 @@ app.post('/api/auth/login', async (req, res) => {
     try {
         const { email, password } = req.body;
         
+        console.log('🔐 Login attempt for:', email);
+        console.log('📁 Users file location:', USERS_FILE);
+        
         if (!email || !password) {
+            console.log('❌ Login failed: Missing email or password');
             return res.status(400).json({ error: 'Email and password are required' });
         }
         
         const users = await readUsers();
+        console.log('👥 Users loaded:', users.length, 'users found');
+        console.log('📋 User emails:', users.map(u => u.email));
+        
         const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
         
         if (!user) {
-            console.log('Login failed: User not found', email);
+            console.log('❌ Login failed: User not found', email);
             return res.status(401).json({ error: 'Invalid email or password' });
         }
         
+        console.log('✅ User found, checking password...');
         const passwordMatch = await bcrypt.compare(password, user.password);
         
         if (!passwordMatch) {
-            console.log('Login failed: Password mismatch for', email);
+            console.log('❌ Login failed: Password mismatch for', email);
             return res.status(401).json({ error: 'Invalid email or password' });
         }
         
@@ -260,10 +268,16 @@ app.get('/api/auth/check', (req, res) => {
 // Read users from file
 async function readUsers() {
     try {
+        console.log('📖 Attempting to read users from:', USERS_FILE);
+        await fs.access(USERS_FILE);
         const data = await fs.readFile(USERS_FILE, 'utf8');
-        return JSON.parse(data);
+        const users = JSON.parse(data);
+        console.log('✅ Successfully read users file,', users.length, 'users found');
+        return users;
     } catch (error) {
-        console.error('Error reading users file:', error);
+        console.error('❌ Error reading users file:', error.message);
+        console.error('   File path:', USERS_FILE);
+        console.error('   Error code:', error.code);
         return [];
     }
 }
