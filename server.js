@@ -353,25 +353,70 @@ app.post('/api/data', requireAuth, async (req, res) => {
 async function initializeApp() {
     try {
         if (isVercel) {
-            // On Vercel, ALWAYS try to copy from project root first (if files exist)
-            // This ensures the latest data is used, even if /tmp already has old data
-            const rootDataFile = path.join(process.cwd(), 'data.json');
-            const rootUsersFile = path.join(process.cwd(), 'users.json');
+            console.log('🚀 Initializing app on Vercel...');
+            console.log('📁 process.cwd():', process.cwd());
+            console.log('📁 __dirname:', __dirname);
+            console.log('📁 DATA_FILE:', DATA_FILE);
+            console.log('📁 USERS_FILE:', USERS_FILE);
             
-            try {
-                const rootData = await fs.readFile(rootDataFile, 'utf8');
-                await fs.writeFile(DATA_FILE, rootData);
-                console.log('✓ Copied data.json from project root to /tmp');
-            } catch (error) {
-                console.log('ℹ data.json not found in project root, will initialize default');
+            // On Vercel, try multiple locations for the files
+            // Files might be in the deployment bundle or need to be copied from build
+            const possibleDataPaths = [
+                path.join(process.cwd(), 'data.json'),
+                path.join(__dirname, 'data.json'),
+                path.join(process.cwd(), '..', 'data.json'),
+                '/tmp/data.json' // Already copied during build
+            ];
+            
+            const possibleUsersPaths = [
+                path.join(process.cwd(), 'users.json'),
+                path.join(__dirname, 'users.json'),
+                path.join(process.cwd(), '..', 'users.json'),
+                '/tmp/users.json' // Already copied during build
+            ];
+            
+            // Try to copy data.json
+            let dataCopied = false;
+            for (const dataPath of possibleDataPaths) {
+                try {
+                    console.log(`🔍 Checking for data.json at: ${dataPath}`);
+                    await fs.access(dataPath);
+                    const rootData = await fs.readFile(dataPath, 'utf8');
+                    const parsed = JSON.parse(rootData);
+                    console.log(`✅ Found data.json with ${parsed.staff?.length || 0} staff, ${Object.keys(parsed.weeks || {}).length} weeks`);
+                    await fs.writeFile(DATA_FILE, rootData);
+                    console.log(`✓ Copied data.json from ${dataPath} to ${DATA_FILE}`);
+                    dataCopied = true;
+                    break;
+                } catch (error) {
+                    console.log(`   ❌ Not found at ${dataPath}: ${error.code || error.message}`);
+                }
             }
             
-            try {
-                const rootUsers = await fs.readFile(rootUsersFile, 'utf8');
-                await fs.writeFile(USERS_FILE, rootUsers);
-                console.log('✓ Copied users.json from project root to /tmp');
-            } catch (error) {
-                console.log('ℹ users.json not found in project root, will initialize default');
+            if (!dataCopied) {
+                console.log('⚠️ data.json not found in any location, will check if /tmp has it or initialize default');
+            }
+            
+            // Try to copy users.json
+            let usersCopied = false;
+            for (const usersPath of possibleUsersPaths) {
+                try {
+                    console.log(`🔍 Checking for users.json at: ${usersPath}`);
+                    await fs.access(usersPath);
+                    const rootUsers = await fs.readFile(usersPath, 'utf8');
+                    const parsed = JSON.parse(rootUsers);
+                    console.log(`✅ Found users.json with ${parsed.length || 0} users:`, parsed.map(u => u.email).join(', '));
+                    await fs.writeFile(USERS_FILE, rootUsers);
+                    console.log(`✓ Copied users.json from ${usersPath} to ${USERS_FILE}`);
+                    usersCopied = true;
+                    break;
+                } catch (error) {
+                    console.log(`   ❌ Not found at ${usersPath}: ${error.code || error.message}`);
+                }
+            }
+            
+            if (!usersCopied) {
+                console.log('⚠️ users.json not found in any location, will check if /tmp has it or initialize default');
             }
         } else {
             // On local development, check if files exist in project root
@@ -398,12 +443,19 @@ async function initializeApp() {
         await initializeDataFile();
         await initializeUsersFile();
         
-        // Log what data was loaded
-        if (!isVercel) {
-            const data = await readData();
-            if (data) {
-                console.log(`✓ Loaded data: ${data.staff?.length || 0} staff members, ${Object.keys(data.weeks || {}).length} weeks`);
-            }
+        // Log what data was loaded (for both local and Vercel)
+        const data = await readData();
+        if (data) {
+            console.log(`✅ Loaded data: ${data.staff?.length || 0} staff members, ${Object.keys(data.weeks || {}).length} weeks`);
+        } else {
+            console.log('⚠️ No data loaded - file might be empty or missing');
+        }
+        
+        const users = await readUsers();
+        if (users && users.length > 0) {
+            console.log(`✅ Loaded users: ${users.length} users (${users.map(u => u.email).join(', ')})`);
+        } else {
+            console.log('⚠️ No users loaded - file might be empty or missing');
         }
     } catch (error) {
         console.error('Error initializing app:', error);
