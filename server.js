@@ -154,10 +154,16 @@ async function initializeDataFile() {
 // Read data from file
 async function readData() {
     try {
+        console.log('📖 Attempting to read data from:', DATA_FILE);
+        await fs.access(DATA_FILE);
         const data = await fs.readFile(DATA_FILE, 'utf8');
-        return JSON.parse(data);
+        const parsed = JSON.parse(data);
+        console.log('✅ Successfully read and parsed data file');
+        return parsed;
     } catch (error) {
-        console.error('Error reading data file:', error);
+        console.error('❌ Error reading data file:', error.message);
+        console.error('   File path:', DATA_FILE);
+        console.error('   Error code:', error.code);
         return null;
     }
 }
@@ -165,10 +171,14 @@ async function readData() {
 // Write data to file
 async function writeData(data) {
     try {
+        console.log('✍️ Attempting to write data to:', DATA_FILE);
         await fs.writeFile(DATA_FILE, JSON.stringify(data, null, 2));
+        console.log('✅ Successfully wrote data file');
         return true;
     } catch (error) {
-        console.error('Error writing data file:', error);
+        console.error('❌ Error writing data file:', error.message);
+        console.error('   File path:', DATA_FILE);
+        console.error('   Error code:', error.code);
         return false;
     }
 }
@@ -290,21 +300,38 @@ async function initializeUsersFile() {
 
 // GET endpoint - retrieve all data (protected)
 app.get('/api/data', requireAuth, async (req, res) => {
-    const data = await readData();
-    if (data) {
-        res.json(data);
-    } else {
-        res.status(500).json({ error: 'Failed to read data' });
+    try {
+        console.log('📥 GET /api/data - Reading data file from:', DATA_FILE);
+        const data = await readData();
+        if (data) {
+            console.log('✅ Data read successfully - Staff:', data.staff?.length || 0, 'Weeks:', Object.keys(data.weeks || {}).length);
+            res.json(data);
+        } else {
+            console.error('❌ Failed to read data - readData returned null');
+            res.status(500).json({ error: 'Failed to read data file' });
+        }
+    } catch (error) {
+        console.error('❌ Error in GET /api/data:', error);
+        res.status(500).json({ error: 'Server error reading data: ' + error.message });
     }
 });
 
 // POST endpoint - save all data (protected)
 app.post('/api/data', requireAuth, async (req, res) => {
-    const success = await writeData(req.body);
-    if (success) {
-        res.json({ success: true, message: 'Data saved successfully' });
-    } else {
-        res.status(500).json({ error: 'Failed to save data' });
+    try {
+        console.log('💾 POST /api/data - Saving data to:', DATA_FILE);
+        console.log('📊 Data being saved - Staff:', req.body.staff?.length || 0, 'Weeks:', Object.keys(req.body.weeks || {}).length);
+        const success = await writeData(req.body);
+        if (success) {
+            console.log('✅ Data saved successfully');
+            res.json({ success: true, message: 'Data saved successfully' });
+        } else {
+            console.error('❌ Failed to save data - writeData returned false');
+            res.status(500).json({ error: 'Failed to save data file' });
+        }
+    } catch (error) {
+        console.error('❌ Error in POST /api/data:', error);
+        res.status(500).json({ error: 'Server error saving data: ' + error.message });
     }
 });
 

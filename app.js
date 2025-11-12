@@ -312,6 +312,7 @@ function initializeWithOriginalData(weekData) {
 // API Functions - Save/Load from server
 async function saveToStorage() {
     try {
+        console.log('💾 Saving data to server...', { staffCount: appState.staff?.length, weeksCount: Object.keys(appState.weeks || {}).length });
         const response = await fetch('/api/data', {
             method: 'POST',
             headers: {
@@ -320,25 +321,32 @@ async function saveToStorage() {
             credentials: 'include',
             body: JSON.stringify(appState)
         });
+        
+        console.log('📡 Save response status:', response.status, response.statusText);
+        
         const result = await response.json();
         if (!response.ok) {
             if (response.status === 401) {
+                console.error('❌ Unauthorized - session expired');
                 // Unauthorized - redirect to login
                 if (typeof logout === 'function') {
                     logout();
                 }
                 return false;
             }
-            console.error('Error saving data:', result.error);
+            console.error('❌ Error saving data:', result.error);
+            alert('Error saving data: ' + (result.error || 'Unknown error'));
             return false;
         }
+        console.log('✅ Data saved successfully');
         return true;
     } catch (e) {
-        console.error('Error saving to server:', e);
+        console.error('❌ Error saving to server:', e);
+        alert('Error saving data. Please check the console for details.');
         // Fallback to localStorage if server is unavailable
         try {
             localStorage.setItem('pcStaffData', JSON.stringify(appState));
-            console.log('Saved to localStorage as fallback');
+            console.log('⚠️ Saved to localStorage as fallback');
         } catch (localError) {
             console.error('Error saving to localStorage:', localError);
         }
@@ -359,20 +367,27 @@ const DEFAULT_STAFF = [
 
 async function loadFromStorage() {
     try {
+        console.log('📥 Loading data from server...');
         const response = await fetch('/api/data', {
             credentials: 'include'
         });
+        
+        console.log('📡 Load response status:', response.status, response.statusText);
+        
         if (!response.ok) {
             if (response.status === 401) {
+                console.error('❌ Unauthorized - not logged in');
                 // Unauthorized - redirect to login
                 if (typeof logout === 'function') {
                     logout();
                 }
                 return false;
             }
-            throw new Error('Failed to fetch data');
+            console.error('❌ Failed to fetch data:', response.status, response.statusText);
+            throw new Error('Failed to fetch data: ' + response.statusText);
         }
         const data = await response.json();
+        console.log('✅ Data loaded:', { staffCount: data.staff?.length, weeksCount: Object.keys(data.weeks || {}).length });
         // Migrate old data structure if needed
         if (data && data.days && !data.weeks) {
             // Old structure - migrate to week-based
