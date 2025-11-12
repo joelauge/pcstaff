@@ -4,6 +4,7 @@ const path = require('path');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const session = require('express-session');
+const FileStore = require('session-file-store')(session);
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -29,7 +30,9 @@ app.use(cors({
     credentials: true
 }));
 app.use(express.json());
-app.use(session({
+
+// Configure session store - use file store on Vercel, memory store locally
+const sessionConfig = {
     secret: process.env.SESSION_SECRET || 'prayer-center-staff-secret-key-change-in-production',
     resave: false,
     saveUninitialized: false,
@@ -41,7 +44,22 @@ app.use(session({
         sameSite: 'lax', // 'lax' works for same-site cookies (frontend and API on same domain)
         // Don't set domain - let browser handle it
     }
-}));
+};
+
+// Use file-based session store on Vercel (stores in /tmp), memory store locally
+if (isVercel) {
+    const sessionDir = path.join('/tmp', 'sessions');
+    sessionConfig.store = new FileStore({
+        path: sessionDir,
+        ttl: 24 * 60 * 60, // 24 hours in seconds
+        retries: 0
+    });
+    console.log('📁 Using file-based session store at:', sessionDir);
+} else {
+    console.log('📁 Using memory-based session store (local dev)');
+}
+
+app.use(session(sessionConfig));
 
 // Explicit routes for static assets (MUST come before static middleware)
 app.get('/styles.css', (req, res) => {
