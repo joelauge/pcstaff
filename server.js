@@ -138,7 +138,8 @@ async function initializeDataFile() {
                     saturday: { date: '', shifts: [] }
                 }
             },
-            additionalNotes: {}
+            additionalNotes: {},
+            staffProfiles: {}
         };
         await fs.writeFile(DATA_FILE, JSON.stringify(defaultData, null, 2));
         console.log('Created initial data.json file');

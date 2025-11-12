@@ -3,7 +3,8 @@ const appState = {
     staff: [],
     currentWeek: '', // ISO week string (e.g., "2026-W01")
     weeks: {}, // Object with week keys containing day data
-    additionalNotes: {} // Object with week keys containing notes
+    additionalNotes: {}, // Object with week keys containing notes
+    staffProfiles: {} // Object with staff name as key, containing profile data
 };
 
 // Helper function to get week start date (Sunday) from a date
@@ -388,6 +389,10 @@ async function loadFromStorage() {
         }
         if (data) {
             Object.assign(appState, data);
+            // Initialize staffProfiles if it doesn't exist
+            if (!appState.staffProfiles) {
+                appState.staffProfiles = {};
+            }
             // Always ensure default staff are present (merge with existing)
             if (!appState.staff || appState.staff.length === 0) {
                 appState.staff = [...DEFAULT_STAFF];
@@ -480,9 +485,17 @@ function renderStaffList() {
     appState.staff.forEach(staff => {
         const staffItem = document.createElement('div');
         staffItem.className = 'staff-item';
+        // Escape quotes in staff name for onclick
+        const escapedStaff = staff.replace(/'/g, "\\'").replace(/"/g, '&quot;');
         staffItem.innerHTML = `
             <span>${staff}</span>
-            <button class="remove-staff" onclick="removeStaff('${staff}')">×</button>
+            <button class="edit-staff-btn" onclick="openStaffProfile('${escapedStaff}')" title="Edit Profile">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                </svg>
+            </button>
+            <button class="remove-staff" onclick="removeStaff('${escapedStaff}')">×</button>
         `;
         staffList.appendChild(staffItem);
     });
@@ -828,6 +841,16 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Show Sunday by default
     showDay('sunday');
+    
+    // Close staff profile modal when clicking outside of it
+    const staffModal = document.getElementById('staff-profile-modal');
+    if (staffModal) {
+        staffModal.addEventListener('click', (e) => {
+            if (e.target === staffModal) {
+                closeStaffProfile();
+            }
+        });
+    }
 });
 
 // Reset to original data
@@ -851,9 +874,106 @@ async function resetToOriginal() {
     }
 }
 
+// Staff Profile Management
+function openStaffProfile(staffName) {
+    const modal = document.getElementById('staff-profile-modal');
+    const profile = appState.staffProfiles[staffName] || {};
+    
+    // Set the original staff name (for lookup)
+    document.getElementById('profile-staff-name').value = staffName;
+    
+    // Populate form fields
+    document.getElementById('profile-name').value = profile.name || staffName;
+    document.getElementById('profile-email').value = profile.email || '';
+    document.getElementById('profile-phone').value = profile.phone || '';
+    document.getElementById('profile-address').value = profile.address || '';
+    document.getElementById('profile-notes').value = profile.notes || '';
+    
+    // Clear and set preferred shifts checkboxes
+    const checkboxes = document.querySelectorAll('input[name="preferredShifts"]');
+    checkboxes.forEach(cb => cb.checked = false);
+    
+    if (profile.preferredShifts && Array.isArray(profile.preferredShifts)) {
+        profile.preferredShifts.forEach(shift => {
+            const checkbox = document.querySelector(`input[name="preferredShifts"][value="${shift}"]`);
+            if (checkbox) {
+                checkbox.checked = true;
+            }
+        });
+    }
+    
+    modal.classList.remove('hidden');
+}
+
+function closeStaffProfile() {
+    const modal = document.getElementById('staff-profile-modal');
+    modal.classList.add('hidden');
+    // Reset form
+    document.getElementById('staff-profile-form').reset();
+}
+
+
+function saveStaffProfile(event) {
+    event.preventDefault();
+    
+    const originalName = document.getElementById('profile-staff-name').value;
+    const formData = new FormData(event.target);
+    
+    // Get all checked preferred shifts
+    const preferredShifts = [];
+    document.querySelectorAll('input[name="preferredShifts"]:checked').forEach(cb => {
+        preferredShifts.push(cb.value);
+    });
+    
+    // Build profile object
+    const profile = {
+        name: formData.get('name') || originalName,
+        email: formData.get('email') || '',
+        phone: formData.get('phone') || '',
+        address: formData.get('address') || '',
+        notes: formData.get('notes') || '',
+        preferredShifts: preferredShifts
+    };
+    
+    // If name changed, update the staff list
+    const newName = profile.name;
+    if (newName !== originalName && newName.trim()) {
+        // Remove old name from staff list
+        const oldIndex = appState.staff.indexOf(originalName);
+        if (oldIndex !== -1) {
+            appState.staff[oldIndex] = newName;
+            // Move profile data to new name
+            if (appState.staffProfiles[originalName]) {
+                appState.staffProfiles[newName] = appState.staffProfiles[originalName];
+                delete appState.staffProfiles[originalName];
+            }
+            // Sort staff list
+            appState.staff.sort();
+        }
+    }
+    
+    // Save profile under the (possibly new) name
+    appState.staffProfiles[newName] = profile;
+    
+    // Save to storage
+    saveToStorage();
+    
+    // Re-render staff list in case name changed
+    renderStaffList();
+    
+    // Close modal
+    closeStaffProfile();
+    
+    // Show success message
+    alert('Staff profile saved successfully!');
+}
+
 // Make functions globally available
 window.addStaff = addStaff;
 window.removeStaff = removeStaff;
+window.openStaffProfile = openStaffProfile;
+window.closeStaffProfile = closeStaffProfile;
+window.saveStaffProfile = saveStaffProfile;
 window.addStaffToShift = addStaffToShift;
 window.removeStaffFromShift = removeStaffFromShift;
 window.updateStaffInShift = updateStaffInShift;
