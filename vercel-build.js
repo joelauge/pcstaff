@@ -74,7 +74,8 @@ async function initializeFiles() {
                         saturday: { date: '', shifts: [] }
                     }
                 },
-                additionalNotes: {}
+                additionalNotes: {},
+                staffProfiles: {}
             };
             
             await fs.writeFile(DATA_FILE, JSON.stringify(defaultData, null, 2));
