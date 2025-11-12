@@ -51,18 +51,34 @@ Use a free cron service like [cron-job.org](https://cron-job.org) or [EasyCron](
 
 ## Backup Storage
 
-- **Local Development**: Backups are saved to `./backups/` directory
-- **Vercel**: Backups are saved to `/tmp/backups/` (ephemeral - only lasts during function execution)
+**Backups are now stored persistently in your GitHub repository!**
 
-**Important:** Vercel's `/tmp` directory is ephemeral and doesn't persist between deployments. For permanent backups, consider:
+- **Primary Storage**: All backups are committed to `backups/` directory in your GitHub repository
+- **Local Fallback**: Backups are also saved locally to `./backups/` directory (for development)
+- **Version Control**: Each backup is a git commit, so you have full version history
 
-1. **Committing backups to GitHub** (modify backup function to use GitHub API)
-2. **Using external storage** (S3, Google Cloud Storage, etc.)
-3. **Emailing backups** (modify backup function to send via email)
+**Setup Required:**
+
+1. **Create a GitHub Personal Access Token:**
+   - Go to GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)
+   - Click "Generate new token (classic)"
+   - Give it a name like "PCStaff Backup System"
+   - Select scope: `repo` (full control of private repositories)
+   - Copy the token
+
+2. **Set Environment Variables in Vercel:**
+   - Go to your Vercel project → Settings → Environment Variables
+   - Add:
+     - `GITHUB_TOKEN`: Your GitHub personal access token
+     - `GITHUB_REPO_OWNER`: Your GitHub username (default: `joelauge`)
+     - `GITHUB_REPO_NAME`: Repository name (default: `pcstaff`)
+
+3. **That's it!** Backups will now be committed to GitHub automatically.
 
 ## Backup Retention
 
-- Backups older than 7 days are automatically deleted
+- **GitHub**: All backups are kept indefinitely (versioned in git)
+- **Local**: Backups older than 7 days are automatically deleted locally
 - Each backup file is named: `backup-YYYY-MM-DD-HH-MM-SS.json`
 
 ## Manual Backup

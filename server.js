@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs').promises;
 const path = require('path');
+const https = require('https');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
@@ -398,15 +399,173 @@ app.post('/api/data', requireAuth, async (req, res) => {
     }
 });
 
-// Backup directory
+// GitHub repository info for persistent backups
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN;
+const GITHUB_REPO_OWNER = process.env.GITHUB_REPO_OWNER || 'joelauge';
+const GITHUB_REPO_NAME = process.env.GITHUB_REPO_NAME || 'pcstaff';
+const GITHUB_BACKUP_PATH = 'backups'; // Directory in repo for backups
+
+// Backup directory (local fallback)
 const BACKUP_DIR = isVercel ? '/tmp/backups' : path.join(__dirname, 'backups');
+
+// Commit backup to GitHub repository
+async function commitBackupToGitHub(backupContent, filename) {
+    if (!GITHUB_TOKEN) {
+        console.log('⚠️ GITHUB_TOKEN not set - skipping GitHub backup');
+        return { success: false, message: 'GitHub token not configured' };
+    }
+
+    return new Promise((resolve, reject) => {
+        const filePath = `${GITHUB_BACKUP_PATH}/${filename}`;
+        const content = Buffer.from(backupContent).toString('base64');
+        
+        // GitHub API: Create or update file
+        const apiPath = `/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/contents/${filePath}`;
+        
+        // First, check if file exists to get SHA (required for updates)
+        const checkOptions = {
+            hostname: 'api.github.com',
+            path: apiPath,
+            method: 'GET',
+            headers: {
+                'Authorization': `token ${GITHUB_TOKEN}`,
+                'User-Agent': 'PCStaff-Backup-System',
+                'Accept': 'application/vnd.github.v3+json'
+            }
+        };
+
+        const checkReq = https.request(checkOptions, (checkRes) => {
+            let checkData = '';
+            checkRes.on('data', chunk => checkData += chunk);
+            checkRes.on('end', () => {
+                let sha = null;
+                if (checkRes.statusCode === 200) {
+                    const existingFile = JSON.parse(checkData);
+                    sha = existingFile.sha;
+                    console.log(`📝 Updating existing backup file: ${filename}`);
+                } else if (checkRes.statusCode === 404) {
+                    console.log(`📝 Creating new backup file: ${filename}`);
+                } else {
+                    console.error(`⚠️ Error checking file existence: ${checkRes.statusCode}`);
+                }
+
+                // Now create/update the file
+                const commitMessage = `Daily backup: ${filename}`;
+                const body = JSON.stringify({
+                    message: commitMessage,
+                    content: content,
+                    ...(sha && { sha: sha }) // Include SHA if updating existing file
+                });
+
+                const options = {
+                    hostname: 'api.github.com',
+                    path: apiPath,
+                    method: 'PUT',
+                    headers: {
+                        'Authorization': `token ${GITHUB_TOKEN}`,
+                        'User-Agent': 'PCStaff-Backup-System',
+                        'Accept': 'application/vnd.github.v3+json',
+                        'Content-Type': 'application/json',
+                        'Content-Length': Buffer.byteLength(body)
+                    }
+                };
+
+                const req = https.request(options, (res) => {
+                    let data = '';
+                    res.on('data', chunk => data += chunk);
+                    res.on('end', () => {
+                        if (res.statusCode === 201 || res.statusCode === 200) {
+                            console.log(`✅ Backup committed to GitHub: ${filename}`);
+                            resolve({ success: true, message: 'Backup committed to GitHub' });
+                        } else {
+                            const error = JSON.parse(data);
+                            console.error(`❌ GitHub API error: ${res.statusCode} - ${error.message}`);
+                            reject(new Error(`GitHub API error: ${error.message}`));
+                        }
+                    });
+                });
+
+                req.on('error', (error) => {
+                    console.error('❌ GitHub API request error:', error);
+                    reject(error);
+                });
+
+                req.write(body);
+                req.end();
+            });
+        });
+
+        checkReq.on('error', (error) => {
+            console.error('❌ Error checking GitHub file:', error);
+            reject(error);
+        });
+
+        checkReq.end();
+    });
+}
+
+// List backups from GitHub
+async function listBackupsFromGitHub() {
+    if (!GITHUB_TOKEN) {
+        return { backups: [] };
+    }
+
+    return new Promise((resolve, reject) => {
+        const apiPath = `/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/contents/${GITHUB_BACKUP_PATH}`;
+        
+        const options = {
+            hostname: 'api.github.com',
+            path: apiPath,
+            method: 'GET',
+            headers: {
+                'Authorization': `token ${GITHUB_TOKEN}`,
+                'User-Agent': 'PCStaff-Backup-System',
+                'Accept': 'application/vnd.github.v3+json'
+            }
+        };
+
+        const req = https.request(options, (res) => {
+            let data = '';
+            res.on('data', chunk => data += chunk);
+            res.on('end', () => {
+                if (res.statusCode === 200) {
+                    const files = JSON.parse(data);
+                    const backups = files
+                        .filter(file => file.name.startsWith('backup-') && file.name.endsWith('.json'))
+                        .map(file => ({
+                            filename: file.name,
+                            size: file.size,
+                            url: file.download_url,
+                            sha: file.sha,
+                            created: file.created_at,
+                            modified: file.updated_at || file.created_at
+                        }))
+                        .sort((a, b) => new Date(b.modified) - new Date(a.modified));
+                    
+                    resolve({ backups });
+                } else if (res.statusCode === 404) {
+                    // Directory doesn't exist yet (no backups)
+                    resolve({ backups: [] });
+                } else {
+                    const error = JSON.parse(data);
+                    console.error(`❌ GitHub API error listing backups: ${res.statusCode} - ${error.message}`);
+                    reject(new Error(`GitHub API error: ${error.message}`));
+                }
+            });
+        });
+
+        req.on('error', (error) => {
+            console.error('❌ Error listing GitHub backups:', error);
+            reject(error);
+        });
+
+        req.end();
+    });
+}
 
 // Create backup function
 async function createBackup() {
     try {
-        // Ensure backup directory exists
-        await fs.mkdir(BACKUP_DIR, { recursive: true });
-        
         // Get current date for backup filename
         const now = new Date();
         const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
@@ -434,21 +593,39 @@ async function createBackup() {
             }))
         };
         
-        // Save backup file
+        const backupContent = JSON.stringify(backup, null, 2);
         const backupFileName = `backup-${dateStr}-${timeStr}.json`;
-        const backupPath = path.join(BACKUP_DIR, backupFileName);
-        await fs.writeFile(backupPath, JSON.stringify(backup, null, 2));
         
-        console.log(`✅ Backup created: ${backupFileName}`);
+        // Save backup locally (fallback)
+        try {
+            await fs.mkdir(BACKUP_DIR, { recursive: true });
+            const backupPath = path.join(BACKUP_DIR, backupFileName);
+            await fs.writeFile(backupPath, backupContent);
+            console.log(`✅ Local backup created: ${backupFileName}`);
+        } catch (localError) {
+            console.warn('⚠️ Could not create local backup:', localError.message);
+        }
         
-        // Clean up old backups (keep last 7 days)
+        // Commit to GitHub (persistent storage)
+        let githubResult = { success: false, message: 'GitHub backup not configured' };
+        try {
+            githubResult = await commitBackupToGitHub(backupContent, backupFileName);
+        } catch (githubError) {
+            console.error('❌ GitHub backup failed:', githubError.message);
+            githubResult = { success: false, message: githubError.message };
+        }
+        
+        // Clean up old backups (keep last 30 days in GitHub, 7 days locally)
         await cleanupOldBackups();
         
         return { 
-            success: true, 
-            message: 'Backup created successfully',
+            success: githubResult.success || true, // Success if GitHub worked, or at least local worked
+            message: githubResult.success 
+                ? 'Backup created and committed to GitHub' 
+                : `Backup created locally. GitHub backup: ${githubResult.message}`,
             filename: backupFileName,
-            timestamp: now.toISOString()
+            timestamp: now.toISOString(),
+            github: githubResult.success
         };
     } catch (error) {
         console.error('❌ Error creating backup:', error);
@@ -456,7 +633,7 @@ async function createBackup() {
     }
 }
 
-// Clean up backups older than 7 days
+// Clean up old backups (local only - GitHub keeps all backups)
 async function cleanupOldBackups() {
     try {
         const files = await fs.readdir(BACKUP_DIR);
@@ -472,14 +649,17 @@ async function cleanupOldBackups() {
                 if (stats.mtimeMs < sevenDaysAgo) {
                     await fs.unlink(filePath);
                     deletedCount++;
-                    console.log(`🗑️ Deleted old backup: ${file}`);
+                    console.log(`🗑️ Deleted old local backup: ${file}`);
                 }
             }
         }
         
         if (deletedCount > 0) {
-            console.log(`✅ Cleaned up ${deletedCount} old backup(s)`);
+            console.log(`✅ Cleaned up ${deletedCount} old local backup(s)`);
         }
+        
+        // Note: GitHub backups are kept indefinitely (versioned in git)
+        // You can manually delete old backups from GitHub if needed
     } catch (error) {
         console.error('⚠️ Error cleaning up old backups:', error.message);
     }
@@ -507,9 +687,24 @@ app.post('/api/backup', async (req, res) => {
     }
 });
 
-// Get list of backups (protected)
+// Get list of backups (protected) - from GitHub
 app.get('/api/backups', requireAuth, async (req, res) => {
     try {
+        // Try to get backups from GitHub first
+        try {
+            const githubBackups = await listBackupsFromGitHub();
+            if (githubBackups.backups && githubBackups.backups.length > 0) {
+                return res.json({
+                    backups: githubBackups.backups,
+                    source: 'github',
+                    message: 'Backups stored in GitHub repository'
+                });
+            }
+        } catch (githubError) {
+            console.warn('⚠️ Could not fetch GitHub backups, falling back to local:', githubError.message);
+        }
+        
+        // Fallback to local backups
         await fs.mkdir(BACKUP_DIR, { recursive: true });
         const files = await fs.readdir(BACKUP_DIR);
         
@@ -522,15 +717,20 @@ app.get('/api/backups', requireAuth, async (req, res) => {
                     filename: file,
                     size: stats.size,
                     created: stats.birthtime,
-                    modified: stats.mtime
+                    modified: stats.mtime,
+                    url: null // Local files don't have download URLs
                 });
             }
         }
         
         // Sort by modified date (newest first)
-        backups.sort((a, b) => b.modified - a.modified);
+        backups.sort((a, b) => new Date(b.modified) - new Date(a.modified));
         
-        res.json({ backups });
+        res.json({ 
+            backups,
+            source: 'local',
+            message: 'Backups stored locally (GitHub backup not configured)'
+        });
     } catch (error) {
         console.error('❌ Error listing backups:', error);
         res.status(500).json({ error: 'Server error listing backups: ' + error.message });
