@@ -49,10 +49,12 @@ const sessionConfig = {
 // Use file-based session store on Vercel (stores in /tmp), memory store locally
 if (isVercel) {
     const sessionDir = path.join('/tmp', 'sessions');
+    // FileStore will create the directory if it doesn't exist
     sessionConfig.store = new FileStore({
         path: sessionDir,
         ttl: 24 * 60 * 60, // 24 hours in seconds
-        retries: 0
+        retries: 0,
+        logFn: () => {} // Suppress file store logs
     });
     console.log('📁 Using file-based session store at:', sessionDir);
 } else {
