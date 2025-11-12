@@ -3,11 +3,14 @@ const fs = require('fs').promises;
 const path = require('path');
 const cors = require('cors');
 const bcrypt = require('bcrypt');
-const session = require('express-session');
-const FileStore = require('session-file-store')(session);
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// JWT secret - use environment variable in production
+const JWT_SECRET = process.env.JWT_SECRET || 'prayer-center-staff-secret-key-change-in-production';
+const JWT_COOKIE_NAME = 'auth_token';
 
 // Use /tmp directory on Vercel (serverless functions have read-only filesystem except /tmp)
 // For local development, use data directory
@@ -22,7 +25,7 @@ const SOURCE_DATA_FILE = path.join(SOURCE_DATA_DIR, 'data.json');
 const SOURCE_USERS_FILE = path.join(SOURCE_DATA_DIR, 'users.json');
 
 // Middleware
-// Trust proxy on Vercel (important for cookies and sessions)
+// Trust proxy on Vercel (important for cookies)
 app.set('trust proxy', 1);
 
 app.use(cors({
@@ -31,37 +34,17 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Configure session store - use file store on Vercel, memory store locally
-const sessionConfig = {
-    secret: process.env.SESSION_SECRET || 'prayer-center-staff-secret-key-change-in-production',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-        // On Vercel, we're behind a proxy with HTTPS, so secure should be true
-        secure: isVercel || process.env.NODE_ENV === 'production',
-        httpOnly: true,
-        maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        sameSite: 'lax', // 'lax' works for same-site cookies (frontend and API on same domain)
-        // Don't set domain - let browser handle it
+// Cookie parser helper
+function parseCookies(cookieHeader) {
+    const cookies = {};
+    if (cookieHeader) {
+        cookieHeader.split(';').forEach(cookie => {
+            const parts = cookie.trim().split('=');
+            cookies[parts[0]] = parts[1];
+        });
     }
-};
-
-// Use file-based session store on Vercel (stores in /tmp), memory store locally
-if (isVercel) {
-    const sessionDir = path.join('/tmp', 'sessions');
-    // FileStore will create the directory if it doesn't exist
-    sessionConfig.store = new FileStore({
-        path: sessionDir,
-        ttl: 24 * 60 * 60, // 24 hours in seconds
-        retries: 0,
-        logFn: () => {} // Suppress file store logs
-    });
-    console.log('📁 Using file-based session store at:', sessionDir);
-} else {
-    console.log('📁 Using memory-based session store (local dev)');
+    return cookies;
 }
-
-app.use(session(sessionConfig));
 
 // Explicit routes for static assets (MUST come before static middleware)
 app.get('/styles.css', (req, res) => {
@@ -124,23 +107,30 @@ app.use(express.static(staticPath, {
     }
 }));
 
-// Authentication middleware
+// Authentication middleware - verify JWT token
 function requireAuth(req, res, next) {
+    const cookies = parseCookies(req.headers.cookie);
+    const token = cookies[JWT_COOKIE_NAME];
+    
     console.log('🔒 requireAuth check:', {
-        hasSession: !!req.session,
-        sessionID: req.sessionID,
-        hasUser: !!(req.session && req.session.user),
-        user: req.session?.user?.email,
+        hasToken: !!token,
         cookies: req.headers.cookie ? 'present' : 'missing'
     });
     
-    if (req.session && req.session.user) {
-        console.log('✅ Auth check passed for:', req.session.user.email);
-        return next();
+    if (!token) {
+        console.log('❌ Auth check failed - no token');
+        return res.status(401).json({ error: 'Unauthorized' });
     }
     
-    console.log('❌ Auth check failed - no session or user');
-    res.status(401).json({ error: 'Unauthorized' });
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
+        req.user = decoded; // Attach user info to request
+        console.log('✅ Auth check passed for:', decoded.email);
+        return next();
+    } catch (error) {
+        console.log('❌ Auth check failed - invalid token:', error.message);
+        return res.status(401).json({ error: 'Unauthorized' });
+    }
 }
 
 // Initialize data file if it doesn't exist
@@ -251,48 +241,39 @@ app.post('/api/auth/login', async (req, res) => {
             return res.status(401).json({ error: 'Invalid email or password' });
         }
         
-        // Set session
-        req.session.user = {
-            email: user.email,
-            name: user.name
-        };
+        // Create JWT token
+        const token = jwt.sign(
+            { 
+                email: user.email, 
+                name: user.name 
+            },
+            JWT_SECRET,
+            { expiresIn: '24h' }
+        );
         
-        console.log('💾 Setting session:', {
-            sessionID: req.sessionID,
-            user: user.email,
-            cookie: req.session.cookie
+        console.log('✅ Login successful for', email);
+        console.log('🍪 Setting JWT cookie:', {
+            secure: isVercel || process.env.NODE_ENV === 'production',
+            httpOnly: true,
+            maxAge: 24 * 60 * 60 * 1000,
+            sameSite: 'lax'
         });
         
-        // Save session explicitly
-        req.session.save((err) => {
-            if (err) {
-                console.error('❌ Session save error:', err);
-                return res.status(500).json({ error: 'Failed to create session' });
+        // Set JWT token as httpOnly cookie
+        res.cookie(JWT_COOKIE_NAME, token, {
+            secure: isVercel || process.env.NODE_ENV === 'production',
+            httpOnly: true,
+            maxAge: 24 * 60 * 60 * 1000, // 24 hours
+            sameSite: 'lax',
+            path: '/'
+        });
+        
+        res.json({
+            success: true,
+            user: {
+                email: user.email,
+                name: user.name
             }
-            
-            console.log('✅ Login successful for', email, 'Session ID:', req.sessionID);
-            console.log('🍪 Session cookie will be set:', {
-                secure: req.session.cookie.secure,
-                httpOnly: req.session.cookie.httpOnly,
-                sameSite: req.session.cookie.sameSite,
-                maxAge: req.session.cookie.maxAge
-            });
-            
-            // Explicitly set cookie headers
-            res.cookie('connect.sid', req.sessionID, {
-                secure: isVercel || process.env.NODE_ENV === 'production',
-                httpOnly: true,
-                maxAge: 24 * 60 * 60 * 1000,
-                sameSite: 'lax'
-            });
-            
-            res.json({
-                success: true,
-                user: {
-                    email: user.email,
-                    name: user.name
-                }
-            });
         });
     } catch (error) {
         console.error('Login error:', error);
@@ -301,22 +282,34 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 app.post('/api/auth/logout', (req, res) => {
-    req.session.destroy((err) => {
-        if (err) {
-            return res.status(500).json({ error: 'Logout failed' });
-        }
-        res.json({ success: true });
+    // Clear the JWT cookie
+    res.clearCookie(JWT_COOKIE_NAME, {
+        path: '/',
+        secure: isVercel || process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        sameSite: 'lax'
     });
+    res.json({ success: true });
 });
 
 app.get('/api/auth/check', (req, res) => {
-    console.log('Auth check - Session ID:', req.sessionID, 'User:', req.session?.user);
-    if (req.session && req.session.user) {
+    const cookies = parseCookies(req.headers.cookie);
+    const token = cookies[JWT_COOKIE_NAME];
+    
+    if (!token) {
+        return res.json({ authenticated: false });
+    }
+    
+    try {
+        const decoded = jwt.verify(token, JWT_SECRET);
         res.json({
             authenticated: true,
-            user: req.session.user
+            user: {
+                email: decoded.email,
+                name: decoded.name
+            }
         });
-    } else {
+    } catch (error) {
         res.json({ authenticated: false });
     }
 });
