@@ -16,6 +16,9 @@ const DATA_FILE = path.join(DATA_DIR, 'data.json');
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
 // Middleware
+// Trust proxy on Vercel (important for cookies and sessions)
+app.set('trust proxy', 1);
+
 app.use(cors({
     origin: true,
     credentials: true
@@ -26,10 +29,13 @@ app.use(session({
     resave: false,
     saveUninitialized: false,
     cookie: {
-        secure: process.env.NODE_ENV === 'production', // Use secure cookies in production (HTTPS)
+        // On Vercel, we're behind a proxy with HTTPS, so secure should be true
+        // But we need to detect Vercel environment properly
+        secure: isVercel || process.env.NODE_ENV === 'production',
         httpOnly: true,
         maxAge: 24 * 60 * 60 * 1000, // 24 hours
-        sameSite: 'lax'
+        sameSite: isVercel ? 'none' : 'lax', // 'none' required for cross-site cookies on Vercel
+        // Don't set domain - let browser handle it
     }
 }));
 
@@ -181,12 +187,14 @@ app.post('/api/auth/login', async (req, res) => {
         const user = users.find(u => u.email.toLowerCase() === email.toLowerCase());
         
         if (!user) {
+            console.log('Login failed: User not found', email);
             return res.status(401).json({ error: 'Invalid email or password' });
         }
         
         const passwordMatch = await bcrypt.compare(password, user.password);
         
         if (!passwordMatch) {
+            console.log('Login failed: Password mismatch for', email);
             return res.status(401).json({ error: 'Invalid email or password' });
         }
         
@@ -196,12 +204,22 @@ app.post('/api/auth/login', async (req, res) => {
             name: user.name
         };
         
-        res.json({
-            success: true,
-            user: {
-                email: user.email,
-                name: user.name
+        // Save session explicitly
+        req.session.save((err) => {
+            if (err) {
+                console.error('Session save error:', err);
+                return res.status(500).json({ error: 'Failed to create session' });
             }
+            
+            console.log('Login successful for', email, 'Session ID:', req.sessionID);
+            
+            res.json({
+                success: true,
+                user: {
+                    email: user.email,
+                    name: user.name
+                }
+            });
         });
     } catch (error) {
         console.error('Login error:', error);
@@ -219,6 +237,7 @@ app.post('/api/auth/logout', (req, res) => {
 });
 
 app.get('/api/auth/check', (req, res) => {
+    console.log('Auth check - Session ID:', req.sessionID, 'User:', req.session?.user);
     if (req.session && req.session.user) {
         res.json({
             authenticated: true,
