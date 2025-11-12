@@ -139,7 +139,7 @@ function initializeWithOriginalData(weekData) {
         { name: 'Carmen Quesada', role: '', time: '12am-8am' },
         { name: 'John Rhee', role: '', time: '12am-8am' }
     ];
-    appState.days.sunday.shifts[1].staff = [
+    weekData.sunday.shifts[1].staff = [
         { name: 'Gloria Rankin', role: 'Works e/o week: alt. Shift Captain', time: '8:00am-4:00pm' },
         { name: 'Penny Spence', role: 'works every week, but e/o week as TL', time: '8:00am-4:00pm' },
         { name: 'Ruth Stockdale', role: 'works e/o alt. week with Penny', time: '8:00am-4:00pm' },
@@ -872,6 +872,22 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function resetToOriginal() {
     if (confirm('Reset current week to original schedule? This will clear all current week\'s data.')) {
         try {
+            // Ensure current week exists in appState.weeks
+            if (!appState.weeks) {
+                appState.weeks = {};
+            }
+            if (!appState.weeks[appState.currentWeek]) {
+                appState.weeks[appState.currentWeek] = {
+                    sunday: { date: '', shifts: [] },
+                    monday: { date: '', shifts: [] },
+                    tuesday: { date: '', shifts: [] },
+                    wednesday: { date: '', shifts: [] },
+                    thursday: { date: '', shifts: [] },
+                    friday: { date: '', shifts: [] },
+                    saturday: { date: '', shifts: [] }
+                };
+            }
+            
             // Reset current week only
             const weekData = getCurrentWeekData();
             // Clear and reinitialize
@@ -884,7 +900,7 @@ async function resetToOriginal() {
             renderAllDays();
         } catch (error) {
             console.error('Error resetting data:', error);
-            alert('Error resetting data. Please try again.');
+            alert('Error resetting data: ' + error.message + '. Please check the console for details.');
         }
     }
 }
