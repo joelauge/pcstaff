@@ -126,9 +126,20 @@ app.use(express.static(staticPath, {
 
 // Authentication middleware
 function requireAuth(req, res, next) {
+    console.log('🔒 requireAuth check:', {
+        hasSession: !!req.session,
+        sessionID: req.sessionID,
+        hasUser: !!(req.session && req.session.user),
+        user: req.session?.user?.email,
+        cookies: req.headers.cookie ? 'present' : 'missing'
+    });
+    
     if (req.session && req.session.user) {
+        console.log('✅ Auth check passed for:', req.session.user.email);
         return next();
     }
+    
+    console.log('❌ Auth check failed - no session or user');
     res.status(401).json({ error: 'Unauthorized' });
 }
 
@@ -246,14 +257,34 @@ app.post('/api/auth/login', async (req, res) => {
             name: user.name
         };
         
+        console.log('💾 Setting session:', {
+            sessionID: req.sessionID,
+            user: user.email,
+            cookie: req.session.cookie
+        });
+        
         // Save session explicitly
         req.session.save((err) => {
             if (err) {
-                console.error('Session save error:', err);
+                console.error('❌ Session save error:', err);
                 return res.status(500).json({ error: 'Failed to create session' });
             }
             
-            console.log('Login successful for', email, 'Session ID:', req.sessionID);
+            console.log('✅ Login successful for', email, 'Session ID:', req.sessionID);
+            console.log('🍪 Session cookie will be set:', {
+                secure: req.session.cookie.secure,
+                httpOnly: req.session.cookie.httpOnly,
+                sameSite: req.session.cookie.sameSite,
+                maxAge: req.session.cookie.maxAge
+            });
+            
+            // Explicitly set cookie headers
+            res.cookie('connect.sid', req.sessionID, {
+                secure: isVercel || process.env.NODE_ENV === 'production',
+                httpOnly: true,
+                maxAge: 24 * 60 * 60 * 1000,
+                sameSite: 'lax'
+            });
             
             res.json({
                 success: true,
